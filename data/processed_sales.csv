@@ -1,0 +1,8 @@
+purchase_id,user_id,amount,category,name,country,revenue_percentage
+1,103,25,Electronics,Eve,DE,10.955302366345311
+2,102,30,Books,Bob,UK,13.146362839614373
+3,104,10.5,Garden,John,US,4.601226993865031
+4,102,22.5,Electronics,Bob,UK,9.85977212971078
+5,101,10.2,Garden,Alice,US,4.469763365468887
+6,101,50,Groceries,Alice,US,21.910604732690622
+7,103,80,Electronics,Eve,DE,35.056967572305
