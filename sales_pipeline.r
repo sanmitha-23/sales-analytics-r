@@ -1,109 +1,216 @@
+# ==========================================
+# Sales Analytics using R
+# ==========================================
+
+# Synthetic dataset generated for demonstration purposes
+
 # Load the tidyverse package
 library(tidyverse)
 
-# tibble: modern version of R's df
+# ==========================================
+# 1. Generate customer data
+# ==========================================
 
-# Create users table
-users <- tibble(
-  user_id = c(101, 102, 103, 104, 105), # c(): combine function
-  name = c("Alice", "Bob", "Eve", "John", "Charles"),
-  country = c("US", "UK", "DE", "US", "UK")
+set.seed(123)
+
+customers <- tibble(
+  user_id = 1:500,
+  country = sample(
+    c("US", "UK", "DE", "IN", "CA", "AU"),
+    500,
+    replace = TRUE
+  )
 )
 
-# Create purchases table
+# ==========================================
+# 2. Generate purchase data
+# ==========================================
+
+categories <- c(
+  "Electronics",
+  "Books",
+  "Clothing",
+  "Home & Kitchen",
+  "Groceries",
+  "Sports",
+  "Beauty",
+  "Toys",
+  "Garden",
+  "Furniture"
+)
+
 purchases <- tibble(
-  purchase_id = 1:7,
-  # Number from 1 to 7, inclusive;
-  # equivalent to purchase_id = c(1, 2, 3, 4, 5, 6, 7)
-  user_id = c(103, 102, 104, 102, 101, 101, 103),
-  amount = c(25.00, 30.00, 10.50, 22.50, 10.20, 50.00, 80.00),
-  category = c("Electronics", "Books", "Garden", "Electronics", "Garden",
-               "Groceries", "Electronics")
+  purchase_id = 1:5000,
+
+  user_id = sample(
+    customers$user_id,
+    5000,
+    replace = TRUE
+  ),
+
+  purchase_date = sample(
+    seq(
+      as.Date("2025-01-01"),
+      as.Date("2025-12-31"),
+      by = "day"
+    ),
+    5000,
+    replace = TRUE
+  ),
+
+  category = sample(
+    categories,
+    5000,
+    replace = TRUE
+  )
 )
 
-# Combine the tables to create a sales table
-# %>% is called the pipe.
-# It means: Take the thing on the left and pass it to the function on the right.
+purchases <- purchases %>%
+  mutate(
+    amount = round(
+      case_when(
+        category == "Groceries" ~ runif(n(), 5, 150),
+        category == "Books" ~ runif(n(), 10, 100),
+        category == "Clothing" ~ runif(n(), 20, 200),
+        category == "Beauty" ~ runif(n(), 10, 150),
+        category == "Toys" ~ runif(n(), 10, 150),
+        category == "Sports" ~ runif(n(), 20, 250),
+        category == "Garden" ~ runif(n(), 20, 300),
+        category == "Home & Kitchen" ~ runif(n(), 25, 350),
+        category == "Electronics" ~ runif(n(), 50, 800),
+        category == "Furniture" ~ runif(n(), 100, 1000)
+      ),
+      2
+    )
+  )
+
+# ==========================================
+# 3. Combine customer and purchase data
+# ==========================================
+
 sales <- purchases %>%
-  left_join(users, by = "user_id")
-
-# Calculate total revenue
-# summarise() is used when we want to reduce many rows into a summary value.
-total_revenue <- sales %>%
-  summarise(
-    total_revenue = sum(amount)
+  left_join(
+    customers,
+    by = "user_id"
   )
 
-# Calculate the number of purchases
-# n() counts the number of rows in the current data.
-total_purchases <- sales %>%
-  summarise(
-    number_of_purchases = n()
+# ==========================================
+# 4. Data quality checks
+# ==========================================
+
+# Check for missing values
+colSums(is.na(sales))
+
+# Check for duplicate purchase IDs
+sales %>%
+  count(purchase_id) %>%
+  filter(n > 1)
+
+# Check for invalid purchase amounts
+sales %>%
+  filter(amount <= 0)
+
+# Check for invalid customer references
+sales %>%
+  filter(!user_id %in% customers$user_id)
+
+# ==========================================
+# 5. Transform data
+# ==========================================
+
+sales <- sales %>%
+  mutate(
+    month = floor_date(purchase_date, "month")
   )
 
-# Calculate average purchase value
-average_purchase <- sales %>%
+# ==========================================
+# 6. Overall sales metrics
+# ==========================================
+
+overall_metrics <- sales %>%
   summarise(
+    total_revenue = sum(amount),
+    number_of_purchases = n(),
     average_purchase = mean(amount)
   )
 
-# Compute revenue by category
+# ==========================================
+# 7. Revenue by category
+# ==========================================
+
 revenue_by_category <- sales %>%
   group_by(category) %>%
   summarise(
     total_revenue = sum(amount),
     number_of_purchases = n(),
-    average_purchase = mean(amount)
+    average_purchase = mean(amount),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    revenue_percentage = total_revenue / sum(total_revenue) * 100
   ) %>%
   arrange(desc(total_revenue))
 
-# Compute revenue by country
+# ==========================================
+# 8. Revenue by country
+# ==========================================
+
 revenue_by_country <- sales %>%
   group_by(country) %>%
   summarise(
     total_revenue = sum(amount),
     number_of_purchases = n(),
-    average_purchase = mean(amount)
+    average_purchase = mean(amount),
+    .groups = "drop"
   ) %>%
   arrange(desc(total_revenue))
 
-# Customer Analysis - to figure out who is the highest valued customer
-customer_summary <- sales %>%
-  group_by(user_id, name, country) %>%
+# ==========================================
+# 9. Top customers by revenue
+# ==========================================
+
+top_customers <- sales %>%
+  group_by(user_id, country) %>%
   summarise(
-    total_spend = sum(amount),
+    total_spent = sum(amount),
     number_of_purchases = n(),
     average_purchase = mean(amount),
     .groups = "drop"
   ) %>%
-  arrange(desc(total_spend))
-
-# Add a new column to sales table
-# mutate() is used to create or modify columns.
-sales <- sales %>%
   mutate(
-    revenue_percentage = amount / sum(amount) * 100
+    revenue_percentage = total_spent / sum(total_spent) * 100
+  ) %>%
+  arrange(desc(total_spent))
+
+top_10_revenue_share <- top_customers %>%
+  slice_head(n = 10) %>%
+  summarise(
+    top_10_revenue = sum(total_spent),
+    revenue_percentage =
+      top_10_revenue / overall_metrics$total_revenue * 100
   )
 
-# Check for missing(na) values
-colSums(is.na(sales))
+# ==========================================
+# 10. Monthly revenue
+# ==========================================
 
-# Check for duplicate Purchase IDs
-sales %>% 
-  count(purchase_id) %>%
-  filter(n > 1)
+monthly_revenue <- sales %>%
+  group_by(month) %>%
+  summarise(
+    total_revenue = sum(amount),
+    number_of_purchases = n(),
+    average_purchase = mean(amount),
+    .groups = "drop"
+  ) %>%
+  arrange(month)
 
-# Check invalid amount
-sales %>%
-  filter(amount <= 0)
+# ==========================================
+# 11. Visualizations
+# ==========================================
 
-# Use ggplot2
-# reorder() - instead of random/alphabetical ordering,
-# the categories are ordered based on their revenue
-# geom_col() - Represent the data using columns/bars.
-# coord_flip() - This swaps the X and Y axes.
-# labs() - add labels
-ggplot(
+# Revenue by category
+
+category_plot <- ggplot(
   revenue_by_category,
   aes(
     x = reorder(category, total_revenue),
@@ -118,14 +225,92 @@ ggplot(
     y = "Revenue"
   )
 
-# Save the graph generated
-ggsave("plots/revenue_by_category.png",
+ggsave(
+  "plots/revenue_by_category.png",
+  category_plot,
   width = 8,
   height = 5
 )
 
-# Export processed data
-dir.create("data", showWarnings = FALSE)
+# Revenue by country
+
+country_plot <- ggplot(
+  revenue_by_country,
+  aes(
+    x = reorder(country, total_revenue),
+    y = total_revenue
+  )
+) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Revenue by Country",
+    x = "Country",
+    y = "Revenue"
+  )
+
+ggsave(
+  "plots/revenue_by_country.png",
+  country_plot,
+  width = 8,
+  height = 5
+)
+
+# Monthly revenue trend
+
+monthly_plot <- ggplot(
+  monthly_revenue,
+  aes(
+    x = month,
+    y = total_revenue
+  )
+) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Monthly Revenue Trend",
+    x = "Month",
+    y = "Revenue"
+  )
+
+ggsave(
+  "plots/monthly_revenue.png",
+  monthly_plot,
+  width = 8,
+  height = 5
+)
+
+# Top 10 customers
+
+top_10_customers <- top_customers %>%
+  slice_head(n = 10)
+
+customer_plot <- ggplot(
+  top_10_customers,
+  aes(
+    x = reorder(user_id, total_spent),
+    y = total_spent
+  )
+) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 10 Customers by Revenue",
+    x = "Customer ID",
+    y = "Total Spent"
+  )
+
+ggsave(
+  "plots/top_10_customers.png",
+  customer_plot,
+  width = 8,
+  height = 5
+)
+
+# ==========================================
+# 12. Export processed data
+# ==========================================
+
 write_csv(
   sales,
   "data/processed_sales.csv"
